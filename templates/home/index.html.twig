@@ -1,0 +1,128 @@
+{% extends 'base.html.twig' %}
+{% block title %}Home{% endblock %}
+{% block body %}
+    <div id="map" style="height: 500px"></div>
+
+    <div class="form-group mt-5">
+        <label for="year">Select a year to show graph</label>
+        <select name="year" id="year" class="form-control">
+            <option value=""></option>
+            {% for year in 1989..2019 %}
+            <option {{ year == 2019 ? 'selected="selected"' : '' }}>{{ year }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <canvas id="chart" class="mt-5">
+{% endblock %}
+{% block javascripts %}
+    <script src="{{ asset('js/jquery-jvectormap-ch-merc.js') }}"></script>
+    <script>
+        $(document).ready(() => {
+
+            let config = {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    tooltips: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    hover: {
+                        mode: 'nearest',
+                        intersect: true
+                    },
+                    scales: {
+                        xAxes: [{
+                            display: true,
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'Date'
+                            }
+                        }],
+                        yAxes: [{
+                            display: true,
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'Value'
+                            }
+                        }]
+                    }
+                }
+            };
+            //create chart
+            var ctx = document.getElementById('chart').getContext('2d');
+            let chart = new Chart(ctx, config);
+
+            let myMap = new jvm.Map({
+                map: 'ch_merc',
+                container: $('#map'),
+                markerStyle: {
+                    initial: {
+                        fill: '#F8E23B',
+                        stroke: '#383f47'
+                    }
+                },
+                onMarkerClick: function(event, code){
+                    $.ajax({
+                        url : '{{ path('chart_data') }}',
+                        data: {id: code, year: $('#year').val()},
+                        success: function (response) {
+                            let labels = {};
+                            let t_data = [];
+                            response.data.temperature.forEach(t => {
+                                t_data.push(t.value);
+                                labels[t.date] = new Date(t.date).toDateString();
+                            });
+
+                            let p_data = [];
+                            response.data.precipitation.forEach(p => {
+                                p_data.push(p.value);
+                                labels[p.date] = new Date(p.date).toDateString();
+                            });
+
+                            let dataset = [];
+                            dataset.push({
+                                label: 'Temperature',
+                                backgroundColor: 'red',
+					            borderColor: 'red',
+					            fill: false,
+					            data: t_data
+                            });
+
+                            dataset.push({
+                               label: 'Precipitation',
+                                backgroundColor: 'blue',
+					            borderColor: 'blue',
+					            fill: false,
+					            data: p_data
+                            });
+
+                            console.log(chart);
+                            config.data.datasets = dataset;
+                            config.data.labels = Object.values(labels);
+
+                            chart.update();
+                        }
+                    });
+                }
+            });
+
+            //get markers from database
+            $.ajax({
+                url : '{{ path('get_regions') }}',
+                success : function(r){
+                    r.data.forEach(s => {
+                        myMap.addMarker(s.id, {
+                            latLng : [s.latitude, s.longitude],
+                            name: s.name
+                        });
+                    });
+                }
+            });
+        });
+    </script>
+{% endblock %}
